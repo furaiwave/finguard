@@ -1,7 +1,6 @@
 import { 
     IsString, IsEnum, IsOptional, IsInt, Min, Max, MaxLength, MinLength, IsIP
 } from 'class-validator'
-import { Type } from '@nestjs/common'
 import type {
     CurrencyCode, TransactionChannel,
     TransactionType
