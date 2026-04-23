@@ -18,7 +18,7 @@ import type {
 } from '../../../../shared/types'
 import { AnalysisEntity } from './analysis'
 
-@Entity('transcations')
+@Entity('transactions')
 @Index(['status', 'createdAt'])
 @Index(['type', 'channel'])
 export class TransactionEntity {
@@ -57,8 +57,7 @@ export class TransactionEntity {
 
     @Column({
         type: 'enum',
-        enum: ['pending', 'analyzing', 'approved', 'approved_with_review', 'blocked', 'manual_reviem'],
-        default: 'pending'
+        enum: ['card_present', 'card_not_present', 'bank_transfer', 'crypto', 'mobile_payment', 'atm']
     })
     channel!: TransactionChannel
 
@@ -107,7 +106,7 @@ export class TransactionEntity {
     createdAt!: Date
 
     @UpdateDateColumn({
-        name: 'updatedAt'
+        name: 'updated_at'
     })
     updatedAt!: Date
 

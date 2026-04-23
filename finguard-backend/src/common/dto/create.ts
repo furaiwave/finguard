@@ -10,7 +10,7 @@ export class CreateTransactionDto {
     @IsOptional()
     @IsString()
     @MaxLength(36)
-    transactionOd?: string
+    transactionId?: string
 
     @IsString()
     @MinLength(1)

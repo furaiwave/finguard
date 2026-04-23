@@ -1,7 +1,7 @@
-import { IsEnum, IsString } from "class-validator";
+import { IsEnum, IsString, IsNotEmpty } from "class-validator";
 import type { RuleOperator } from "shared/types";
 
-export class RuleConditionDto { 
+export class RuleConditionDto {
     @IsString()
     field!: string
 
@@ -19,5 +19,6 @@ export class RuleConditionDto {
     ] satisfies RuleOperator[])
     operator!: RuleOperator
 
+    @IsNotEmpty()
     value!: string | number | boolean | Array<string | number>
 }

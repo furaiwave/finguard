@@ -11,7 +11,7 @@ export class GenerateReportDto {
         'fraud_summary',
         'transaction_volume',
         'risk_distribution',
-        'rule_effectivenes',
+        'rule_effectiveness',
         'ai_performance'
     ] satisfies ReportType[])
     type!: ReportType

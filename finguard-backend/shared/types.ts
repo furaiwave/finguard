@@ -6,7 +6,7 @@ export type UserId          = Brand<string, 'UserId'>
 export type AccountId       = Brand<string, 'AccountId'>
 export type MerchantId      = Brand<string, 'MerchantId'>
 export type RuleId          = Brand<string, 'RuleId'>
-export type RepotyId        = Brand<string, 'ReportId'>
+export type ReportId        = Brand<string, 'ReportId'>
 export type AnalysisId      = Brand<string, 'AnalysisId'>
 export type ModelVersion    = Brand<string, 'ModelVersion'>
 
@@ -21,17 +21,17 @@ export const mkUserId           = (s: string): UserId        => s as UserId
 export const mkAccountId        = (s: string): AccountId     => s as AccountId
 export const mkMerchantId       = (s: string): MerchantId    => s as MerchantId
 export const mkRuleId           = (s: string): RuleId        => s as RuleId
-export const mkReportId         = (s: string): RepotyId      => s as RepotyId
+export const mkReportId         = (s: string): ReportId      => s as ReportId
 export const mkAnalysisId       = (s: string): AnalysisId    => s as AnalysisId
 export const mkModelVersion     = (s: string): ModelVersion  => s as ModelVersion
 
-export const mkAmountVersion = (n: number): AmountMinor => {
+export const mkAmountMinor = (n: number): AmountMinor => {
     if(!Number.isInteger(n) || n < 0) throw new RangeError(`Invalid minor amount: ${n}`)
     return n as AmountMinor
 }
 
 export const mkRiskScore = (n: number): RiskScore => {
-    return Math.max(0, Math.min(100, Math.round(0))) as RiskScore
+    return Math.max(0, Math.min(100, Math.round(n))) as RiskScore
 }
 
 export const mkConfidence = (n: number): ConfidenceScore => {
@@ -45,9 +45,9 @@ export type RiskLevel           = 'low' | 'medium' | 'high' | 'critical'
 export type TransactionStatus   = 'pending' | 'analyzing' | 'approved' | 'approved_with_review' | 'blocked' | 'manual_review'
 export type RuleAction          = 'flag' | 'block' | 'review' | 'approve' | 'notify'
 export type RuleOperator        = 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'contains' | 'not_contains' | 'in' | 'not_in'
-export type ReportType          = 'fraud_summary' | 'transaction_volume' | 'risk_distribution' | 'rule_effectivenes' | 'ai_performance'
+export type ReportType          = 'fraud_summary' | 'transaction_volume' | 'risk_distribution' | 'rule_effectiveness' | 'ai_performance'
 export type ReportPeriod        = 'daily' | 'weekly' | 'monthly' | 'custom'
-export type FraudSignalCategory = 'velocity' | 'geolocation' | 'device_fingerprint' | 'behavioral' | 'amount_anomaly' | 'blacklist' | 'pattern_match'
+export type FraudSignalCategory = 'velocity' | 'geolocation' | 'device_fingerprint' | 'behavioral' | 'amount_anomaly' | 'blacklist' | 'pattern_match' | 'ai_detected'
 
 export const RISK_THRESHOLDS = {
     low:    { min: 0, max: 30 },
@@ -76,28 +76,28 @@ export type LegitimacyDecision =
         readonly riskLevel:       Extract<RiskLevel, 'low' | 'medium'>
         readonly requiresReview:  false
         readonly blockedReason:   null
-        readonly reviewDeadlines: null
+        readonly reviewDeadlineMs: null
     } | 
     {
         readonly verdict:         'approved_with_review',
         readonly riskLevel:       Extract<RiskLevel, 'medium' | 'high'>
         readonly requiresReview:  true
         readonly blockedReason:   null
-        readonly reviewDeadlines: number
+        readonly reviewDeadlineMs: number
     } | 
     {
         readonly verdict:         'blocked',
         readonly riskLevel:       Extract<RiskLevel, 'high' | 'critical'>
         readonly requiresReview:  false
-        readonly blockedReason:   FraudSignalCategory
-        readonly reviewDeadlines: null
+        readonly blockedReason:   FraudSignal
+        readonly reviewDeadlineMs: null
     } | 
     {
         readonly verdict:         'pending_manual_review',
         readonly riskLevel:       RiskLevel
         readonly requiresReview:  true
         readonly blockedReason:   FraudSignal | null
-        readonly reviewDeadlines: number
+        readonly reviewDeadlineMs: number
     } 
 
 export type Verdict = LegitimacyDecision['verdict']
@@ -114,10 +114,10 @@ export interface BaseTransactionFields {
 }
 
 export type CardPresentPayment = BaseTransactionFields & {
-    readonly type:      'paymanet'
+    readonly type:      'payment'
     readonly channel:   'card_present'
     readonly merchantId: MerchantId
-    readonly terminalIUd: string
+    readonly terminalId: string
     readonly pinVerified: boolean
 }
 
@@ -127,7 +127,7 @@ export type CardNotPresentPayment = BaseTransactionFields & {
     readonly merchantId: MerchantId
     readonly billingAddressHash: string
     readonly cvvProvided: boolean
-    readonly threeDeStatus: '3ds_passed' | '3ds_failed' | '3ds_not_enrolled' 
+    readonly threeDsStatus: '3ds_passed' | '3ds_failed' | '3ds_not_enrolled'
 }
 
 export type BankTransfer = BaseTransactionFields & {
@@ -160,13 +160,13 @@ export type MobileDeposit = BaseTransactionFields & {
     readonly type:      'deposit'
     readonly channel:   'mobile_payment'
     readonly sourceWalletProvider: 'apple_pay' | 'google_pay' | 'paypal'
-    readonly deviceFingerPrint: string
+    readonly deviceFingerprint: string
 }
 
-export type AnyTransaction = 
+export type AnyTransaction =
+    | CardPresentPayment
     | CardNotPresentPayment
-    | CardNotPresentPayment
-    | BankTransfer 
+    | BankTransfer
     | CryptoTransfer
     | AtmWithdrawal
     | MobileDeposit
@@ -188,11 +188,11 @@ export type AiAnalysisResult = {
     readonly modelVersion: ModelVersion
     readonly riskScore: RiskScore
     readonly confidence: ConfidenceScore
-    readonly desicion: LegitimacyDecision
-    readonly singals: ReadonlyArray<FraudSignal>
+    readonly decision: LegitimacyDecision
+    readonly signals: ReadonlyArray<FraudSignal>
     readonly reasoning: string
-    readonly recommendation: ReadonlyArray<string>
-    readonly processingTomeMs: number
+    readonly recommendations: ReadonlyArray<string>
+    readonly processingTimeMs: number
     readonly analyzedAt: Date
 }
 
@@ -211,7 +211,7 @@ export type RuleDefinition = {
     readonly conditions: ReadonlyArray<RuleCondition>
     readonly conditionLogic: 'AND' | 'OR'
     readonly action: RuleAction
-    readonly reskScoreImpact: number
+    readonly riskScoreImpact: number
     readonly createdAt: Date
     readonly updatedAt: Date
 }
@@ -238,7 +238,7 @@ export type RiskDistributionPayload = {
     readonly medium: number
     readonly high: number
     readonly critical: number
-    readonly avhScore: number
+    readonly avgScore: number
 }
 
 export type RuleEffectivenessPayload = {
@@ -252,20 +252,20 @@ export type RuleEffectivenessPayload = {
 }
 
 export type AiPerfomancePayload = {
-    readonly avgProvessingMs: number
+    readonly avgProcessingMs: number
     readonly avgConfidence: number
     readonly totalAnalyzed: number
     readonly decisionBreakdown: Readonly<Record<Verdict, number>>
 }
 
-export type ReportDate = 
+export type ReportData = 
     | { readonly type: 'fraud_summary';     readonly payload: FraudSummaryPayload }
-    | { readonly type: 'transacrion_volume'; readonly payload: VolumePayload }
+    | { readonly type: 'transaction_volume'; readonly payload: VolumePayload }
     | { readonly type: 'risk_distribution'; readonly payload: RiskDistributionPayload }
-    | { readonly type: 'rule_effectivenss'; readonly payload: RuleEffectivenessPayload }
-    | { readonly type: 'au_perfomance'; readonly paylaod: AiPerfomancePayload }
+    | { readonly type: 'rule_effectiveness'; readonly payload: RuleEffectivenessPayload }
+    | { readonly type: 'ai_performance'; readonly payload: AiPerfomancePayload }
 
-export type ReportPayloadFor<T extends ReportType> = Extract<ReportDate, { type: T }>['payload']
+export type ReportPayloadFor<T extends ReportType> = Extract<ReportData, { type: T }>['payload']
 
 export type ApiSuccess<T> = {
     readonly success: true

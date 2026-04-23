@@ -61,7 +61,7 @@ export class RuleEntity {
         enum: [
             'flag',
             'block',
-            'revie',
+            'review',
             'approve',
             'notify'
         ]
@@ -76,12 +76,12 @@ export class RuleEntity {
     riskScoreImpact!: number
 
     @CreateDateColumn({
-        name: 'create_at'
+        name: 'created_at'
     })
     createdAt!: Date
 
     @UpdateDateColumn({
         name: 'updated_at'
     })
-    updateAt!: Date
+    updatedAt!: Date
 }

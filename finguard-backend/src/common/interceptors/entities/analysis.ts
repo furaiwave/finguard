@@ -2,7 +2,7 @@ import {
     Entity,
     Column,
     PrimaryColumn,
-    ManyToMany,
+    ManyToOne,
     JoinColumn,
     Index
 } from 'typeorm'
@@ -34,12 +34,10 @@ export class AnalysisEntity {
         length: 36,
         name: 'transaction_id'
     })
-    transactionId: TransactionId
+    transactionId!: TransactionId
 
-    @ManyToMany(() => TransactionEntity, (t) => t.analyses)
-    @JoinColumn({
-        name: 'transaction_id'
-    })
+    @ManyToOne(() => TransactionEntity, (t) => t.analyses)
+    @JoinColumn({ name: 'transaction_id' })
     transaction!: TransactionEntity
 
     @Column({

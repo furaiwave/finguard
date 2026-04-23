@@ -5,16 +5,16 @@ import {
 } from 'typeorm'
 
 import type {
-    RepotyId,
-    ReportDate,
+    ReportId,
+    ReportData,
     ReportPeriod,
     ReportType
 } from '../../../../shared/types'
 
 @Entity('reports')
-export class RepoerEntity {
+export class ReportEntity {
     @PrimaryColumn({ type: 'varchar', length: 36 })
-    id!: RepotyId
+    id!: ReportId
 
     @Column({ type: 'varchar', length: 200 })
     name!: string
@@ -25,7 +25,7 @@ export class RepoerEntity {
             'fraud_summary',
             'transaction_volume',
             'risk_distribution',
-            'rule_effctiveness',
+            'rule_effectiveness',
             'ai_performance'
         ]
     })
@@ -45,9 +45,10 @@ export class RepoerEntity {
     @Column({
         type: 'json',
     })
-    data!: ReportDate
+    data!: ReportData
 
-    @Column({ 
+    @Column({
+        type: 'datetime',
         name: 'generated_at'
     })
     generatedAt!: Date

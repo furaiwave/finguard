@@ -26,7 +26,7 @@ export class CreateRuleDto{
         each: true
     })
     @Type(() => RuleConditionDto)
-    conditions!: RuleConditionDto
+    conditions!: RuleConditionDto[]
 
     @IsEnum(['AND', 'OR'])
     conditionLogic!: 'AND' | 'OR'
@@ -43,5 +43,5 @@ export class CreateRuleDto{
     @IsInt()
     @Min(-50)
     @Max(50)
-    reskScoreImpact!: number
+    riskScoreImpact!: number
 }
