@@ -3,9 +3,11 @@ import { TransactionQueryDto } from './dto/query';
 import { CreateRuleDto } from './dto/createRule';
 import { UpdateRulesDto } from './dto/update';
 import { GenerateReportDto } from './dto/report';
+import { UlbBatchDto } from './interceptors/entities/ulbDataset';
 import { TransactionsService } from "../modules/transactions/transactions.service";
 import { RulesService } from "../modules/rules/rules.service";
 import { ReportsService } from "../modules/reports/reports.service";
+import { DatasetAnalysisService } from "../modules/dataset/dataset.service";
 export declare class TransactionController {
     private readonly txService;
     constructor(txService: TransactionsService);
@@ -24,6 +26,11 @@ export declare class RuleContoller {
     update(id: string, dto: UpdateRulesDto): Promise<import("./dto/ruleResponse").RuleResponseDto>;
     toggle(id: string): Promise<import("./dto/ruleResponse").RuleResponseDto>;
     remove(id: string): Promise<void>;
+}
+export declare class DatasetController {
+    private readonly datasetService;
+    constructor(datasetService: DatasetAnalysisService);
+    analyzeBatch(dto: UlbBatchDto): Promise<import("src/modules/dataset/dataset.service").UlbAnalysisResult[]>;
 }
 export declare class ReportController {
     private readonly reportService;

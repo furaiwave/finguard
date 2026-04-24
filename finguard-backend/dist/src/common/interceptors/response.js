@@ -16,16 +16,14 @@ let ResponseIntercaptor = class ResponseIntercaptor {
             success: true,
             data,
             timestamp: new Date().toISOString()
-        })), (0, operators_1.catchError)((err) => (0, rxjs_1.throwError)(() => ({
-            success: false,
-            error: {
-                code: err instanceof common_1.HttpException
-                    ? common_1.HttpStatus[err.getStatus()]
-                    : 'INTERNAL ERROR',
-                message: err instanceof Error ? err.message : 'Unknown error'
-            },
-            timestamp: new Date().toISOString(),
-        }))));
+        })), (0, operators_1.catchError)((err) => {
+            const status = err instanceof common_1.HttpException ? err.getStatus() : 500;
+            const code = common_1.HttpStatus[status] ?? 'INTERNAL_ERROR';
+            const message = err instanceof common_1.HttpException
+                ? (() => { const r = err.getResponse(); return typeof r === 'string' ? r : r.message ?? err.message; })()
+                : err instanceof Error ? err.message : 'Unknown error';
+            return (0, rxjs_1.throwError)(() => new common_1.HttpException({ success: false, error: { code, message }, timestamp: new Date().toISOString() }, status));
+        }));
     }
 };
 exports.ResponseIntercaptor = ResponseIntercaptor;

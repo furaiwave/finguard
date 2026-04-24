@@ -19,6 +19,7 @@ const reports_service_1 = require("./modules/reports/reports.service");
 const analysis_service_1 = require("./modules/analysis/analysis.service");
 const controllers_1 = require("./common/controllers");
 const transactions_service_1 = require("./modules/transactions/transactions.service");
+const dataset_service_1 = require("./modules/dataset/dataset.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -46,8 +47,8 @@ exports.AppModule = AppModule = __decorate([
                 transactions_1.TransactionEntity, analysis_1.AnalysisEntity, rules_1.RuleEntity, report_1.ReportEntity
             ])
         ],
-        controllers: [controllers_1.TransactionController, controllers_1.RuleContoller, controllers_1.ReportController],
-        providers: [transactions_service_1.TransactionsService, rules_service_1.RulesService, reports_service_1.ReportsService, analysis_service_1.AiAnalysisService],
+        controllers: [controllers_1.TransactionController, controllers_1.RuleContoller, controllers_1.ReportController, controllers_1.DatasetController],
+        providers: [transactions_service_1.TransactionsService, rules_service_1.RulesService, reports_service_1.ReportsService, analysis_service_1.AiAnalysisService, dataset_service_1.DatasetAnalysisService],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

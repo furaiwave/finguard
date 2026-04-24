@@ -2,6 +2,7 @@ import {
 isApiSuccess,
 type ApiResponse, type PaginatedResponse,
 type TransactionId, type RuleId, type ReportId,
+type ReportData, type ReportType,
 } from '../../../finguard-backend/shared/types';
 import type { CreateTransactionDto } from '../../../finguard-backend/src/common/dto/create';
 import type { TransactionResponseDto } from '../../../finguard-backend/src/common/dto/transResponse'
@@ -18,11 +19,15 @@ const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
 // ─── Error class ──────────────────────────────────────────────────────────────
 
 export class ApiClientError extends Error {
+
+readonly code: string;
+
 constructor(
-    public readonly code: string,
+    code: string,
     message: string,
 ) {
     super(message);
+    this.code = code;
     this.name = 'ApiClientError';
 }
 }
@@ -97,18 +102,62 @@ remove:  (id: RuleId) =>
     req<void>(`/rules/${id}`, { method: 'DELETE' }),
 } as const;
 
+// ─── DATASET ─────────────────────────────────────────────────────────────────
+
+export type UlbRowPayload = {
+    rowIndex: number
+    time: number
+    v1: number; v2: number; v3: number; v4: number; v5: number; v6: number; v7: number
+    v8: number; v9: number; v10: number; v11: number; v12: number; v13: number; v14: number
+    v15: number; v16: number; v17: number; v18: number; v19: number; v20: number; v21: number
+    v22: number; v23: number; v24: number; v25: number; v26: number; v27: number; v28: number
+    amount: number
+    trueClass: number
+}
+
+export type UlbAnalysisResult = {
+    rowIndex: number
+    amount: number
+    trueClass: 0 | 1
+    verdict: 'fraud' | 'legitimate'
+    riskScore: number
+    riskLevel: 'low' | 'medium' | 'high' | 'critical'
+    confidence: number
+    reasoning: string
+    primarySignals: string[]
+    processingTimeMs: number
+    isCorrect: boolean
+}
+
+export const datasetApi = {
+    analyzeBatch: (rows: UlbRowPayload[]) =>
+        req<UlbAnalysisResult[]>('/dataset/analyze-batch', {
+            method: 'POST',
+            body: JSON.stringify({ rows }),
+        }),
+} as const
+
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
 
+export type ReportResponse = {
+    id: string
+    name: string
+    type: ReportType
+    period: string
+    data: ReportData
+    generatedAt: string
+}
+
 export const reportsApi = {
-generate: (dto: GenerateReportDto) =>
-    req<unknown>('/reports/generate', { method: 'POST', body: JSON.stringify(dto) }),
+    generate: (dto: GenerateReportDto) =>
+        req<ReportResponse>('/reports/generate', { method: 'POST', body: JSON.stringify(dto) }),
 
-list:    () =>
-    req<unknown[]>('/reports'),
+    list: () =>
+        req<ReportResponse[]>('/reports'),
 
-getOne:  (id: ReportId) =>
-    req<unknown>(`/reports/${id}`),
+    getOne: (id: ReportId) =>
+        req<ReportResponse>(`/reports/${id}`),
 
-remove:  (id: ReportId) =>
-    req<void>(`/reports/${id}`, { method: 'DELETE' }),
+    remove: (id: ReportId) =>
+        req<void>(`/reports/${id}`, { method: 'DELETE' }),
 } as const;

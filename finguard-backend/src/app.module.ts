@@ -8,8 +8,9 @@ import { ReportEntity } from './common/interceptors/entities/report';
 import { RulesService } from './modules/rules/rules.service';
 import { ReportsService } from './modules/reports/reports.service';
 import { AiAnalysisService } from './modules/analysis/analysis.service';
-import { TransactionController, RuleContoller, ReportController } from './common/controllers';
+import { TransactionController, RuleContoller, ReportController, DatasetController } from './common/controllers';
 import { TransactionsService } from './modules/transactions/transactions.service';
+import { DatasetAnalysisService } from './modules/dataset/dataset.service';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { TransactionsService } from './modules/transactions/transactions.service
       TransactionEntity, AnalysisEntity, RuleEntity, ReportEntity
     ])
   ],
-  controllers: [TransactionController, RuleContoller, ReportController],
-  providers: [TransactionsService, RulesService, ReportsService, AiAnalysisService],
+  controllers: [TransactionController, RuleContoller, ReportController, DatasetController],
+  providers: [TransactionsService, RulesService, ReportsService, AiAnalysisService, DatasetAnalysisService],
 })
 export class AppModule {}

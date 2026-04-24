@@ -1,14 +1,14 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler, 
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler,
     HttpException, HttpStatus
 } from '@nestjs/common'
 import { Observable, throwError } from 'rxjs'
 import { map, catchError } from 'rxjs/operators'
-import { type ApiResponse, type ApiError} from 'shared/types'
+import { type ApiResponse } from 'shared/types'
 
 @Injectable()
 export class ResponseIntercaptor<T> implements NestInterceptor<T, ApiResponse<T>> {
     intercept(
-        _ctx: ExecutionContext, 
+        _ctx: ExecutionContext,
         next: CallHandler<T>
     ): Observable<ApiResponse<T>> {
         return next.handle().pipe(
@@ -17,18 +17,17 @@ export class ResponseIntercaptor<T> implements NestInterceptor<T, ApiResponse<T>
                 data,
                 timestamp: new Date().toISOString()
             })),
-            catchError((err: unknown) =>
-                throwError((): ApiError => ({
-                    success: false,
-                    error: {
-                        code: err instanceof HttpException
-                            ? HttpStatus[err.getStatus()]
-                            : 'INTERNAL ERROR',
-                        message: err instanceof Error ? err.message : 'Unknown error'
-                    },
-                    timestamp: new Date().toISOString(),
-                }))
-            )
+            catchError((err: unknown) => {
+                const status  = err instanceof HttpException ? err.getStatus() : 500
+                const code    = HttpStatus[status] ?? 'INTERNAL_ERROR'
+                const message = err instanceof HttpException
+                    ? (() => { const r = err.getResponse(); return typeof r === 'string' ? r : (r as any).message ?? err.message })()
+                    : err instanceof Error ? err.message : 'Unknown error'
+                return throwError(() => new HttpException(
+                    { success: false, error: { code, message }, timestamp: new Date().toISOString() },
+                    status,
+                ))
+            })
         )
     }
 }

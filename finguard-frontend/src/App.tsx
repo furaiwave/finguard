@@ -38,7 +38,8 @@ import {
   useDeleteTransaction, useRuleList, useCreateRule, useToggleRule,
   useDeleteRule, useReportList, useGenerateReport,
 } from './hooks';
-import { reportsApi } from './lib/api';
+import { reportsApi, datasetApi } from './lib/api';
+import type { UlbRowPayload, UlbAnalysisResult, ReportResponse } from './lib/api';
 import { mkTransactionId, mkRuleId, mkReportId } from '../../finguard-backend/shared/types';
 import type { TransactionResponseDto } from '../../finguard-backend/src/common/dto/transResponse';
 import type { AnalysisResponseDto } from '../../finguard-backend/src/common/dto/responseAnalysis';
@@ -47,24 +48,35 @@ import type { GenerateReportDto } from '../../finguard-backend/src/common/dto/re
 import type {
   CurrencyCode, TransactionType, TransactionChannel,
   RiskLevel, LegitimacyDecision, RuleAction,
-  ReportType, ReportPeriod, FraudSignal,
+  ReportType, ReportPeriod, FraudSignal, ReportData,
+  FraudSummaryPayload, VolumePayload, RiskDistributionPayload,
+  RuleEffectivenessPayload, AiPerfomancePayload,
 } from '../../finguard-backend/shared/types';
 
 // ─── CONFIG MAPS ─────────────────────────────────────────────────────────────
 
 const VERDICT_CFG = {
-  approved:              { label: 'Approved', bg: 'bg-emerald-950', text: 'text-emerald-300', border: 'border-emerald-800', dot: 'bg-emerald-400' },
-  approved_with_review:  { label: 'Review',   bg: 'bg-amber-950',   text: 'text-amber-300',   border: 'border-amber-800',   dot: 'bg-amber-400'   },
-  blocked:               { label: 'Blocked',  bg: 'bg-red-950',     text: 'text-red-300',     border: 'border-red-800',     dot: 'bg-red-400'     },
-  pending_manual_review: { label: 'Pending',  bg: 'bg-indigo-950',  text: 'text-indigo-300',  border: 'border-indigo-800',  dot: 'bg-indigo-400'  },
+  approved:              { label: 'Схвалено',          bg: 'bg-emerald-950', text: 'text-emerald-300', border: 'border-emerald-800', dot: 'bg-emerald-400' },
+  approved_with_review:  { label: 'Перевірка',         bg: 'bg-amber-950',   text: 'text-amber-300',   border: 'border-amber-800',   dot: 'bg-amber-400'   },
+  blocked:               { label: 'Заблоковано',       bg: 'bg-red-950',     text: 'text-red-300',     border: 'border-red-800',     dot: 'bg-red-400'     },
+  pending_manual_review: { label: 'Очікує',            bg: 'bg-indigo-950',  text: 'text-indigo-300',  border: 'border-indigo-800',  dot: 'bg-indigo-400'  },
 } as const satisfies Record<LegitimacyDecision['verdict'], { label: string; bg: string; text: string; border: string; dot: string }>;
 
 const RISK_CFG = {
-  low:      { label: 'Low',      color: 'text-emerald-400', bar: 'bg-emerald-500' },
-  medium:   { label: 'Medium',   color: 'text-amber-400',   bar: 'bg-amber-500'   },
-  high:     { label: 'High',     color: 'text-orange-400',  bar: 'bg-orange-500'  },
-  critical: { label: 'Critical', color: 'text-red-400',     bar: 'bg-red-500'     },
+  low:      { label: 'Низький',    color: 'text-emerald-400', bar: 'bg-emerald-500' },
+  medium:   { label: 'Середній',  color: 'text-amber-400',   bar: 'bg-amber-500'   },
+  high:     { label: 'Високий',   color: 'text-orange-400',  bar: 'bg-orange-500'  },
+  critical: { label: 'Критичний', color: 'text-red-400',     bar: 'bg-red-500'     },
 } as const satisfies Record<RiskLevel, { label: string; color: string; bar: string }>;
+
+const STATUS_LABELS: Record<NonNullable<TransactionResponseDto['status']>, string> = {
+  pending:              'очікує',
+  analyzing:            'аналізується',
+  approved:             'схвалено',
+  approved_with_review: 'схвалено з перевіркою',
+  blocked:              'заблоковано',
+  manual_review:        'ручна перевірка',
+};
 
 const STATUS_CLS: Record<NonNullable<TransactionResponseDto['status']>, string> = {
   pending:              'bg-zinc-900 text-zinc-400 border-zinc-700',
@@ -124,7 +136,7 @@ function Sel({ children, ...props }: React.ComponentProps<typeof Select> & { chi
   return (
     <Select {...props}>
       <SelectTrigger className="bg-zinc-900 border-zinc-700 h-8 text-sm"><SelectValue /></SelectTrigger>
-      <SelectContent className="bg-zinc-900 border-zinc-700">{children}</SelectContent>
+      <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100">{children}</SelectContent>
     </Select>
   );
 }
@@ -147,14 +159,14 @@ function DeleteDialog({ name, onDelete }: { name: string; onDelete: () => void }
       </AlertDialogTrigger>
       <AlertDialogContent className="bg-zinc-950 border-zinc-800">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-zinc-100 font-mono">Delete?</AlertDialogTitle>
+          <AlertDialogTitle className="text-zinc-100 font-mono">Видалити?</AlertDialogTitle>
           <AlertDialogDescription className="text-zinc-400">
-            Delete "{name}"? Cannot be undone.
+            Видалити "{name}"? Неможливо скасувати.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="border-zinc-700 text-zinc-400 bg-transparent">Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onDelete} className="bg-red-900 hover:bg-red-800 text-white">Delete</AlertDialogAction>
+          <AlertDialogCancel className="border-zinc-700 text-zinc-400 bg-transparent">Скасувати</AlertDialogCancel>
+          <AlertDialogAction onClick={onDelete} className="bg-red-900 hover:bg-red-800 text-white">Видалити</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -184,7 +196,7 @@ function VerdictPill({ verdict }: { verdict: LegitimacyDecision['verdict'] }) {
   const c = VERDICT_CFG[verdict];
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-mono border ${c.bg} ${c.text} ${c.border}`}>
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
       {c.label}
     </span>
   );
@@ -198,14 +210,14 @@ function SignalList({ signals }: { signals: ReadonlyArray<FraudSignal> }) {
     <div className="space-y-1.5">
       {signals.map((s, i) => (
         <div key={i} className="flex gap-2 bg-zinc-900 border border-zinc-800 rounded p-2">
-          <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-red-500 flex-shrink-0" />
+          <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-red-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
               <Mono className="text-red-400">{s.code}</Mono>
               <Badge variant="outline" className="text-xs py-0 px-1 border-zinc-700 text-zinc-600 font-mono">{s.category}</Badge>
               <Mono className="ml-auto">w:{(s.weight * 100).toFixed(0)}%</Mono>
             </div>
-            <p className="text-xs text-zinc-400">{s.description}</p>
+            <p className="text-xs text-zinc-400 wrap-break-word">{s.description}</p>
           </div>
         </div>
       ))}
@@ -219,7 +231,7 @@ function AnalysisPanel({ a }: { a: AnalysisResponseDto }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
       {/* Left */}
-      <div className="space-y-3">
+      <div className="space-y-3 min-w-0">
         <div className="flex items-center gap-3 flex-wrap">
           <VerdictPill verdict={a.verdict} />
           <RiskBar score={a.riskScore} level={a.riskLevel} />
@@ -227,9 +239,9 @@ function AnalysisPanel({ a }: { a: AnalysisResponseDto }) {
 
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Confidence', value: `${(a.confidence * 100).toFixed(1)}%` },
-            { label: 'Time',       value: `${a.processingTimeMs}ms` },
-            { label: 'Model',      value: a.modelVersion },
+            { label: 'Впевненість', value: `${(a.confidence * 100).toFixed(1)}%` },
+            { label: 'Час',         value: `${a.processingTimeMs}ms` },
+            { label: 'Модель',      value: a.modelVersion },
           ].map(({ label, value }) => (
             <div key={label} className="bg-zinc-900 border border-zinc-800 rounded p-2">
               <Mono className="uppercase tracking-wider block mb-1">{label}</Mono>
@@ -241,18 +253,18 @@ function AnalysisPanel({ a }: { a: AnalysisResponseDto }) {
         <div className="bg-zinc-900 border border-zinc-800 rounded p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-            <Mono className="uppercase tracking-wider">Claude AI Reasoning</Mono>
+            <Mono className="uppercase tracking-wider">Аналіз Claude AI</Mono>
           </div>
-          <p className="text-xs text-zinc-300 leading-relaxed">{a.reasoning}</p>
+          <p className="text-xs text-zinc-300 leading-relaxed wrap-break-word whitespace-normal">{a.reasoning}</p>
         </div>
 
         {a.recommendations.length > 0 && (
           <div>
-            <Mono className="uppercase tracking-wider block mb-2">Recommendations</Mono>
+            <Mono className="uppercase tracking-wider block mb-2">Рекомендації</Mono>
             <ol className="space-y-1">
               {a.recommendations.map((r, i) => (
                 <li key={i} className="flex gap-2 text-xs text-zinc-400">
-                  <Mono className="text-zinc-700 flex-shrink-0">{String(i + 1).padStart(2, '0')}.</Mono>
+                  <Mono className="text-zinc-700 shrink-0">{String(i + 1).padStart(2, '0')}.</Mono>
                   {r}
                 </li>
               ))}
@@ -262,17 +274,17 @@ function AnalysisPanel({ a }: { a: AnalysisResponseDto }) {
 
         {a.blockedReason && (
           <div className="bg-red-950/40 border border-red-900 rounded p-2">
-            <Mono className="uppercase tracking-wider text-red-500 block mb-1">Block reason</Mono>
-            <p className="text-xs text-red-300">{a.blockedReason.description}</p>
+            <Mono className="uppercase tracking-wider text-red-500 block mb-1">Причина блокування</Mono>
+            <p className="text-xs text-red-300 wrap-break-word">{a.blockedReason.description}</p>
           </div>
         )}
       </div>
 
       {/* Right — signals */}
-      <div className="space-y-3">
-        <Mono className="uppercase tracking-wider block">Fraud Signals ({a.signals.length})</Mono>
+      <div className="space-y-3 min-w-0">
+        <Mono className="uppercase tracking-wider block">Сигнали шахрайства ({a.signals.length})</Mono>
         {a.signals.length ? <SignalList signals={a.signals} /> : (
-          <div className="text-center py-10 text-zinc-700 font-mono text-xs">No signals detected</div>
+          <div className="text-center py-10 text-zinc-700 font-mono text-xs">Сигналів не виявлено</div>
         )}
       </div>
     </div>
@@ -339,55 +351,55 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" className="bg-emerald-700 hover:bg-emerald-600 text-white font-mono h-8 text-xs">
-          + New Transaction
+          + Нова транзакція
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100 max-w-lg max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-mono text-emerald-400 text-sm">Create Transaction</DialogTitle>
+          <DialogTitle className="font-mono text-emerald-400 text-sm">Створити транзакцію</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Amount (minor units)">
+            <Field label="Сума (мінорні одиниці)">
               <Input value={form.amountMinor} onChange={(e) => set('amountMinor', e.target.value)}
                 className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" placeholder="10000 = $100" />
             </Field>
-            <Field label="Currency">
+            <Field label="Валюта">
               <Sel value={form.currency} onValueChange={(v) => set('currency', v as CurrencyCode)}>
                 {(['USD','EUR','UAH','GBP','CHF','PLN','CZK'] as CurrencyCode[]).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </Sel>
             </Field>
-            <Field label="Type">
+            <Field label="Тип">
               <Sel value={form.type} onValueChange={(v) => changeType(v as TransactionType)}>
                 {(['payment','transfer','withdrawal','deposit','refund','chargeback'] as TransactionType[]).map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </Sel>
             </Field>
-            <Field label="Channel">
+            <Field label="Канал">
               <Sel value={form.channel} onValueChange={(v) => set('channel', v as TransactionChannel)}>
                 {CHANNELS_PER_TYPE[form.type].map((c) => <SelectItem key={c} value={c}>{c.replace(/_/g, ' ')}</SelectItem>)}
               </Sel>
             </Field>
-            <Field label="IP Address">
+            <Field label="IP адреса">
               <Input value={form.ipAddress} onChange={(e) => set('ipAddress', e.target.value)}
                 className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
             </Field>
-            <Field label="Description">
+            <Field label="Опис">
               <Input value={form.description} onChange={(e) => set('description', e.target.value)}
-                className="bg-zinc-900 border-zinc-700 h-8 text-sm" placeholder="Optional" />
+                className="bg-zinc-900 border-zinc-700 h-8 text-sm" placeholder="Необов'язково" />
             </Field>
           </div>
 
           {/* Dynamic channel-specific fields */}
           {form.type === 'payment' && form.channel === 'card_not_present' && (
             <div className="border-t border-zinc-800 pt-3 space-y-3">
-              <Mono className="uppercase tracking-wider">Card-not-present fields</Mono>
+              <Mono className="uppercase tracking-wider">Поля картки (без присутності)</Mono>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="3DS Status">
+                <Field label="Статус 3DS">
                   <Sel value={form.threeDsStatus} onValueChange={(v) => set('threeDsStatus', v as TxForm['threeDsStatus'])}>
-                    <SelectItem value="3ds_passed">Passed</SelectItem>
-                    <SelectItem value="3ds_failed">Failed</SelectItem>
-                    <SelectItem value="3ds_not_enrolled">Not enrolled</SelectItem>
+                    <SelectItem value="3ds_passed">Пройдено</SelectItem>
+                    <SelectItem value="3ds_failed">Не пройдено</SelectItem>
+                    <SelectItem value="3ds_not_enrolled">Не підключено</SelectItem>
                   </Sel>
                 </Field>
                 <Field label="Merchant ID">
@@ -396,7 +408,7 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
                 </Field>
                 <div className="flex items-center gap-2 col-span-2">
                   <Switch checked={form.cvvProvided} onCheckedChange={(v) => set('cvvProvided', v)} />
-                  <Label className="text-xs text-zinc-400">CVV Provided</Label>
+                  <Label className="text-xs text-zinc-400">CVV надано</Label>
                 </div>
               </div>
             </div>
@@ -404,7 +416,7 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
 
           {form.type === 'payment' && form.channel === 'card_present' && (
             <div className="border-t border-zinc-800 pt-3 space-y-3">
-              <Mono className="uppercase tracking-wider">Card present fields</Mono>
+              <Mono className="uppercase tracking-wider">Поля картки (з присутністю)</Mono>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Terminal ID">
                   <Input value={form.terminalId} onChange={(e) => set('terminalId', e.target.value)}
@@ -412,7 +424,7 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
                 </Field>
                 <div className="flex items-center gap-2 pt-5">
                   <Switch checked={form.pinVerified} onCheckedChange={(v) => set('pinVerified', v)} />
-                  <Label className="text-xs text-zinc-400">PIN Verified</Label>
+                  <Label className="text-xs text-zinc-400">PIN підтверджено</Label>
                 </div>
               </div>
             </div>
@@ -420,21 +432,21 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
 
           {form.type === 'transfer' && form.channel === 'bank_transfer' && (
             <div className="border-t border-zinc-800 pt-3 space-y-3">
-              <Mono className="uppercase tracking-wider">Bank transfer fields</Mono>
+              <Mono className="uppercase tracking-wider">Поля банківського переказу</Mono>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Source Account">
+                <Field label="Рахунок відправника">
                   <Input value={form.sourceAccountId} onChange={(e) => set('sourceAccountId', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-xs" />
                 </Field>
-                <Field label="Destination Account">
+                <Field label="Рахунок отримувача">
                   <Input value={form.destinationAccountId} onChange={(e) => set('destinationAccountId', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-xs" />
                 </Field>
-                <Field label="Bank Code">
+                <Field label="Код банку">
                   <Input value={form.destinationBankCode} onChange={(e) => set('destinationBankCode', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
                 </Field>
-                <Field label="Purpose Code">
+                <Field label="Код призначення">
                   <Input value={form.purposeCode} onChange={(e) => set('purposeCode', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
                 </Field>
@@ -444,22 +456,22 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
 
           {form.type === 'transfer' && form.channel === 'crypto' && (
             <div className="border-t border-zinc-800 pt-3 space-y-3">
-              <Mono className="uppercase tracking-wider">Crypto transfer fields</Mono>
+              <Mono className="uppercase tracking-wider">Поля крипто переказу</Mono>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Source Wallet">
+                <Field label="Гаманець відправника">
                   <Input value={form.sourceWallet} onChange={(e) => set('sourceWallet', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-xs" />
                 </Field>
-                <Field label="Destination Wallet">
+                <Field label="Гаманець отримувача">
                   <Input value={form.destinationWallet} onChange={(e) => set('destinationWallet', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-xs" />
                 </Field>
-                <Field label="Blockchain">
+                <Field label="Блокчейн">
                   <Sel value={form.blockchain} onValueChange={(v) => set('blockchain', v as TxForm['blockchain'])}>
                     {(['ethereum','bitcoin','solana','polygon'] as const).map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                   </Sel>
                 </Field>
-                <Field label="Network Fee (minor)">
+                <Field label="Комісія мережі (мінорна)">
                   <Input value={form.networkFeeMinor} onChange={(e) => set('networkFeeMinor', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
                 </Field>
@@ -469,13 +481,13 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
 
           {form.type === 'withdrawal' && form.channel === 'atm' && (
             <div className="border-t border-zinc-800 pt-3 space-y-3">
-              <Mono className="uppercase tracking-wider">ATM fields</Mono>
+              <Mono className="uppercase tracking-wider">Поля банкомату</Mono>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="ATM ID">
+                <Field label="ID банкомату">
                   <Input value={form.atmId} onChange={(e) => set('atmId', e.target.value)}
                     className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
                 </Field>
-                <Field label="PIN Attempts">
+                <Field label="Спроби PIN">
                   <Sel value={String(form.pinAttempts)} onValueChange={(v) => set('pinAttempts', Number(v) as 1|2|3)}>
                     <SelectItem value="1">1</SelectItem>
                     <SelectItem value="2">2</SelectItem>
@@ -488,8 +500,8 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
 
           {form.type === 'deposit' && form.channel === 'mobile_payment' && (
             <div className="border-t border-zinc-800 pt-3 space-y-3">
-              <Mono className="uppercase tracking-wider">Mobile deposit fields</Mono>
-              <Field label="Wallet Provider">
+              <Mono className="uppercase tracking-wider">Поля мобільного депозиту</Mono>
+              <Field label="Провайдер гаманця">
                 <Sel value={form.sourceWalletProvider} onValueChange={(v) => set('sourceWalletProvider', v as TxForm['sourceWalletProvider'])}>
                   {(['apple_pay','google_pay','paypal'] as const).map((p) => <SelectItem key={p} value={p}>{p.replace(/_/g, ' ')}</SelectItem>)}
                 </Sel>
@@ -505,7 +517,7 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setOpen(false)} className="text-zinc-500 h-8">Cancel</Button>
+          <Button variant="ghost" size="sm" onClick={() => setOpen(false)} className="text-zinc-500 h-8">Скасувати</Button>
           <Button size="sm" disabled={loading} onClick={() => create({
             transactionId: uuidv4(), userId: form.userId,
             amountMinor: parseInt(form.amountMinor, 10), currency: form.currency,
@@ -514,7 +526,7 @@ function CreateTxDialog({ onCreated }: { onCreated: () => void }) {
             description: form.description || undefined,
             extraFields: buildExtras(form),
           })} className="bg-emerald-700 hover:bg-emerald-600 text-white font-mono h-8 text-xs">
-            {loading ? 'Creating…' : 'Create'}
+            {loading ? 'Створення…' : 'Створити'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -551,8 +563,8 @@ function TxRow({ tx, onAnalyze, onDelete, isAnalyzing }: {
         <TableCell>
           <Badge className={`text-xs border font-mono ${STATUS_CLS[tx.status]}`}>
             {tx.status === 'analyzing'
-              ? <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />analyzing</span>
-              : tx.status.replace(/_/g, ' ')}
+              ? <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />{STATUS_LABELS.analyzing}</span>
+              : STATUS_LABELS[tx.status]}
           </Badge>
         </TableCell>
         <TableCell>
@@ -575,7 +587,7 @@ function TxRow({ tx, onAnalyze, onDelete, isAnalyzing }: {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left" className="bg-zinc-900 border-zinc-700 text-zinc-300 text-xs">
-                  Run Claude AI analysis
+                  Запустити аналіз Claude AI
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -585,14 +597,14 @@ function TxRow({ tx, onAnalyze, onDelete, isAnalyzing }: {
               </AlertDialogTrigger>
               <AlertDialogContent className="bg-zinc-950 border-zinc-800">
                 <AlertDialogHeader>
-                  <AlertDialogTitle className="text-zinc-100 font-mono">Delete transaction?</AlertDialogTitle>
+                  <AlertDialogTitle className="text-zinc-100 font-mono">Видалити транзакцію?</AlertDialogTitle>
                   <AlertDialogDescription className="text-zinc-400">
-                    Deletes <Mono className="text-zinc-300">{tx.id.slice(0, 8)}</Mono> and all analyses. Cannot be undone.
+                    Видаляє <Mono className="text-zinc-300">{tx.id.slice(0, 8)}</Mono> та всі аналізи. Неможливо скасувати.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel className="border-zinc-700 text-zinc-400 bg-transparent">Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={onDelete} className="bg-red-900 hover:bg-red-800 text-white">Delete</AlertDialogAction>
+                  <AlertDialogCancel className="border-zinc-700 text-zinc-400 bg-transparent">Скасувати</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete} className="bg-red-900 hover:bg-red-800 text-white">Видалити</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -638,11 +650,11 @@ function TransactionsTab() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {[
-            { label: 'Total',    val: stats.total,                   cls: 'text-zinc-100' },
-            { label: 'Approved', val: stats.approved,                cls: 'text-emerald-400' },
-            { label: 'Blocked',  val: stats.blocked,                 cls: 'text-red-400' },
-            { label: 'Pending',  val: stats.pending,                 cls: 'text-zinc-400' },
-            { label: 'Avg Risk', val: `${stats.avgRisk.toFixed(1)}`, cls: 'text-amber-400' },
+            { label: 'Всього',      val: stats.total,                   cls: 'text-zinc-100' },
+            { label: 'Схвалено',    val: stats.approved,                cls: 'text-emerald-400' },
+            { label: 'Заблоковано', val: stats.blocked,                 cls: 'text-red-400' },
+            { label: 'Очікує',      val: stats.pending,                 cls: 'text-zinc-400' },
+            { label: 'Сер. ризик',  val: `${stats.avgRisk.toFixed(1)}`, cls: 'text-amber-400' },
           ].map(({ label, val, cls }) => (
             <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
               <Mono className="uppercase tracking-wider block mb-1">{label}</Mono>
@@ -653,8 +665,8 @@ function TransactionsTab() {
       )}
 
       <SectionHeader
-        title="Transactions"
-        sub={data ? `${data.total} total · click row to expand AI analysis` : ''}
+        title="Транзакції"
+        sub={data ? `${data.total} всього · клікніть на рядок для AI аналізу` : ''}
         action={<CreateTxDialog onCreated={() => refetch()} />}
       />
 
@@ -662,7 +674,7 @@ function TransactionsTab() {
         <Table>
           <TableHeader>
             <TableRow className="border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900/60">
-              {['ID','Type','Amount','Status','Risk','Verdict','Created',''].map((h) => (
+              {['ID','Тип','Сума','Статус','Ризик','Вердикт','Створено',''].map((h) => (
                 <TableHead key={h} className="text-xs font-mono text-zinc-600 uppercase tracking-wider h-9 py-0">{h}</TableHead>
               ))}
             </TableRow>
@@ -677,7 +689,7 @@ function TransactionsTab() {
             )) : !data?.items.length ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-16 font-mono text-zinc-700 text-xs">
-                  No transactions. Create one to begin.
+                  Немає транзакцій. Створіть першу.
                 </TableCell>
               </TableRow>
             ) : (
@@ -717,12 +729,12 @@ function RulesTab() {
   return (
     <div className="space-y-4">
       <SectionHeader
-        title="Fraud Rules"
-        sub={`${rules.length} rules · passed to Claude AI on every analysis`}
+        title="Правила шахрайства"
+        sub={`${rules.length} правил · передаються Claude AI при кожному аналізі`}
         action={
           <Button size="sm" onClick={() => setShowCreate((p) => !p)}
             className="bg-blue-800 hover:bg-blue-700 text-white font-mono h-8 text-xs">
-            {showCreate ? '− Cancel' : '+ New Rule'}
+            {showCreate ? '− Скасувати' : '+ Нове правило'}
           </Button>
         }
       />
@@ -730,35 +742,35 @@ function RulesTab() {
       {showCreate && (
         <Card className="bg-zinc-950 border-zinc-800 border-dashed">
           <CardContent className="p-4 space-y-3">
-            <Mono className="uppercase tracking-wider text-blue-400 block">New Rule</Mono>
+            <Mono className="uppercase tracking-wider text-blue-400 block">Нове правило</Mono>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Name">
+              <Field label="Назва">
                 <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  className="bg-zinc-900 border-zinc-700 h-8 text-sm" placeholder="High-value CNP" />
+                  className="bg-zinc-900 border-zinc-700 h-8 text-sm" placeholder="Висока сума CNP" />
               </Field>
-              <Field label="Action">
+              <Field label="Дія">
                 <Sel value={form.action} onValueChange={(v) => setForm((p) => ({ ...p, action: v as RuleAction }))}>
                   {(['flag','block','review','approve','notify'] as RuleAction[]).map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                 </Sel>
               </Field>
-              <Field label="Description">
+              <Field label="Опис">
                 <Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                   className="bg-zinc-900 border-zinc-700 h-8 text-sm" />
               </Field>
-              <Field label="Risk Impact (-50 to +50)">
+              <Field label="Вплив на ризик (-50 до +50)">
                 <Input type="number" min={-50} max={50} value={form.riskScoreImpact}
                   onChange={(e) => setForm((p) => ({ ...p, riskScoreImpact: parseInt(e.target.value, 10) }))}
                   className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
               </Field>
-              <Field label="Priority (lower = first)">
+              <Field label="Пріоритет (менше = перший)">
                 <Input type="number" min={1} max={1000} value={form.priority}
                   onChange={(e) => setForm((p) => ({ ...p, priority: parseInt(e.target.value, 10) }))}
                   className="bg-zinc-900 border-zinc-700 font-mono h-8 text-sm" />
               </Field>
-              <Field label="Logic">
+              <Field label="Логіка">
                 <Sel value={form.conditionLogic} onValueChange={(v) => setForm((p) => ({ ...p, conditionLogic: v as 'AND' | 'OR' }))}>
-                  <SelectItem value="AND">AND — all conditions</SelectItem>
-                  <SelectItem value="OR">OR — any condition</SelectItem>
+                  <SelectItem value="AND">AND — всі умови</SelectItem>
+                  <SelectItem value="OR">OR — будь-яка умова</SelectItem>
                 </Sel>
               </Field>
             </div>
@@ -768,10 +780,10 @@ function RulesTab() {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)} className="text-zinc-500 h-8">Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)} className="text-zinc-500 h-8">Скасувати</Button>
               <Button size="sm" onClick={() => create(form)} disabled={creating || !form.name}
                 className="bg-blue-800 hover:bg-blue-700 text-white font-mono h-8 text-xs">
-                {creating ? 'Saving…' : 'Save Rule'}
+                {creating ? 'Збереження…' : 'Зберегти'}
               </Button>
             </div>
           </CardContent>
@@ -782,7 +794,7 @@ function RulesTab() {
         {loading ? Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-20 bg-zinc-900 rounded-lg" />) :
          rules.length === 0 ? (
           <div className="text-center py-16 text-zinc-700 font-mono text-xs">
-            No rules. Rules are passed to Claude AI with every transaction analysis.
+            Немає правил. Правила передаються Claude AI при кожному аналізі транзакцій.
           </div>
         ) : (
           rules.map((r) => (
@@ -808,7 +820,7 @@ function RulesTab() {
                       {r.conditions.length > 1 && <Mono className="text-blue-500">[{r.conditionLogic}]</Mono>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Switch
                       checked={r.isActive}
                       onCheckedChange={() => toggle(mkRuleId(r.id))}
@@ -826,12 +838,221 @@ function RulesTab() {
   );
 }
 
+// ─── REPORT VIEW COMPONENTS ──────────────────────────────────────────────────
+
+function StatCard({ label, value, cls = 'text-zinc-100' }: { label: string; value: React.ReactNode; cls?: string }) {
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <Mono className="uppercase tracking-wider block mb-1">{label}</Mono>
+      <span className={`text-xl font-mono font-bold ${cls}`}>{value}</span>
+    </div>
+  );
+}
+
+function BarRow({ label, value, max, barCls, suffix = '' }: { label: string; value: number; max: number; barCls: string; suffix?: string }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="space-y-0.5">
+      <div className="flex justify-between">
+        <Mono>{label}</Mono>
+        <Mono>{value}{suffix}</Mono>
+      </div>
+      <div className="h-2 bg-zinc-800 rounded overflow-hidden">
+        <div className={`h-full rounded transition-all ${barCls}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function FraudSummaryView({ p }: { p: FraudSummaryPayload }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <StatCard label="Всього транзакцій" value={p.totalTransactions} />
+        <StatCard label="Схвалено"           value={p.approvedCount}     cls="text-emerald-400" />
+        <StatCard label="Заблоковано"        value={p.blockedCount}      cls="text-red-400" />
+        <StatCard label="Підозрілих"         value={p.flaggedCount}      cls="text-amber-400" />
+        <StatCard label="Рівень шахрайства"  value={`${p.fraudRate.toFixed(1)}%`} cls="text-red-400" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+          <Mono className="uppercase tracking-wider block mb-1">Загальна сума</Mono>
+          <span className="text-base font-mono font-bold text-zinc-200">{fmtAmount(p.totalAmountMinor, 'USD')}</span>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+          <Mono className="uppercase tracking-wider block mb-1">Сума шахрайства</Mono>
+          <span className="text-base font-mono font-bold text-red-300">{fmtAmount(p.fraudAmountMinor, 'USD')}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VolumeView({ p }: { p: VolumePayload }) {
+  const maxCount = Math.max(...p.series.map((s) => s.count), 1);
+  const channelEntries = Object.entries(p.byChannel).filter(([, v]) => v > 0);
+  const typeEntries    = Object.entries(p.byType).filter(([, v]) => v > 0);
+
+  return (
+    <div className="space-y-5">
+      {p.series.length > 0 ? (
+        <div>
+          <Mono className="uppercase tracking-wider block mb-2">Динаміка по датах</Mono>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {p.series.map((s) => (
+              <div key={s.date} className="flex items-center gap-2">
+                <Mono className="w-24 shrink-0">{s.date}</Mono>
+                <div className="flex-1 h-5 bg-zinc-900 rounded overflow-hidden">
+                  <div className="h-full bg-blue-700 rounded" style={{ width: `${(s.count / maxCount) * 100}%` }} />
+                </div>
+                <Mono className="w-8 text-right">{s.count}</Mono>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-6 text-zinc-700 font-mono text-xs">Немає даних за обраний період</div>
+      )}
+
+      <div className="grid grid-cols-2 gap-5">
+        <div className="space-y-2">
+          <Mono className="uppercase tracking-wider block">За каналом</Mono>
+          {channelEntries.length === 0 ? <Mono className="text-zinc-600">—</Mono> :
+            channelEntries.map(([ch, count]) => (
+              <div key={ch} className="flex justify-between">
+                <Mono>{ch.replace(/_/g, ' ')}</Mono>
+                <Mono className="text-blue-400">{count}</Mono>
+              </div>
+            ))}
+        </div>
+        <div className="space-y-2">
+          <Mono className="uppercase tracking-wider block">За типом</Mono>
+          {typeEntries.length === 0 ? <Mono className="text-zinc-600">—</Mono> :
+            typeEntries.map(([type, count]) => (
+              <div key={type} className="flex justify-between">
+                <Mono>{type}</Mono>
+                <Mono className="text-purple-400">{count}</Mono>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskDistView({ p }: { p: RiskDistributionPayload }) {
+  const total = (p.low + p.medium + p.high + p.critical) || 1;
+  return (
+    <div className="space-y-4">
+      <StatCard label="Середній ризик-скор" value={p.avgScore.toFixed(1)} cls="text-amber-400" />
+      <div className="space-y-3">
+        <BarRow label="Низький"   value={p.low}      max={total} barCls="bg-emerald-600" suffix={` (${((p.low/total)*100).toFixed(0)}%)`} />
+        <BarRow label="Середній"  value={p.medium}   max={total} barCls="bg-amber-600"   suffix={` (${((p.medium/total)*100).toFixed(0)}%)`} />
+        <BarRow label="Високий"   value={p.high}     max={total} barCls="bg-orange-600"  suffix={` (${((p.high/total)*100).toFixed(0)}%)`} />
+        <BarRow label="Критичний" value={p.critical} max={total} barCls="bg-red-600"     suffix={` (${((p.critical/total)*100).toFixed(0)}%)`} />
+      </div>
+    </div>
+  );
+}
+
+function AiPerfView({ p }: { p: AiPerfomancePayload }) {
+  const breakdownItems: { key: keyof typeof p.decisionBreakdown; label: string; barCls: string; textCls: string }[] = [
+    { key: 'approved',              label: 'Схвалено',    barCls: 'bg-emerald-700', textCls: 'text-emerald-400' },
+    { key: 'approved_with_review',  label: 'Перевірка',   barCls: 'bg-amber-700',   textCls: 'text-amber-400'   },
+    { key: 'blocked',               label: 'Заблоковано', barCls: 'bg-red-700',     textCls: 'text-red-400'     },
+    { key: 'pending_manual_review', label: 'Очікує',      barCls: 'bg-indigo-700',  textCls: 'text-indigo-400'  },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2">
+        <StatCard label="Проаналізовано"   value={p.totalAnalyzed} />
+        <StatCard label="Сер. впевненість" value={`${(p.avgConfidence * 100).toFixed(1)}%`} cls="text-blue-400" />
+        <StatCard label="Сер. час"         value={`${Math.round(p.avgProcessingMs)}ms`}      cls="text-purple-400" />
+      </div>
+      <div className="space-y-2">
+        <Mono className="uppercase tracking-wider block">Розподіл рішень</Mono>
+        {breakdownItems.map(({ key, label, barCls, textCls }) => {
+          const count = p.decisionBreakdown[key] ?? 0;
+          const pct   = p.totalAnalyzed > 0 ? (count / p.totalAnalyzed) * 100 : 0;
+          return (
+            <div key={key} className="flex items-center gap-2">
+              <Mono className="w-32 shrink-0">{label}</Mono>
+              <div className="flex-1 h-4 bg-zinc-900 rounded overflow-hidden">
+                <div className={`h-full rounded ${barCls}`} style={{ width: `${pct}%` }} />
+              </div>
+              <Mono className={`w-20 text-right ${textCls}`}>{count} ({pct.toFixed(0)}%)</Mono>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RuleEffView({ p }: { p: RuleEffectivenessPayload }) {
+  if (p.rules.length === 0) {
+    return <div className="text-center py-10 text-zinc-700 font-mono text-xs">Даних про ефективність правил немає</div>;
+  }
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="border-zinc-800">
+          {['Правило', 'Спрацювань', 'True positive', 'False positive'].map((h) => (
+            <TableHead key={h} className="text-xs font-mono text-zinc-600">{h}</TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {p.rules.map((r) => (
+          <TableRow key={r.ruleId} className="border-zinc-800">
+            <TableCell className="text-zinc-300 text-sm">{r.ruleName}</TableCell>
+            <TableCell><Mono>{r.triggeredCount}</Mono></TableCell>
+            <TableCell><Mono className="text-emerald-400">{(r.truePositiveRate * 100).toFixed(0)}%</Mono></TableCell>
+            <TableCell><Mono className="text-red-400">{(r.falsePositiveRate * 100).toFixed(0)}%</Mono></TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function ReportDataView({ data }: { data: ReportData }) {
+  switch (data.type) {
+    case 'fraud_summary':       return <FraudSummaryView p={data.payload} />;
+    case 'transaction_volume':  return <VolumeView p={data.payload} />;
+    case 'risk_distribution':   return <RiskDistView p={data.payload} />;
+    case 'ai_performance':      return <AiPerfView p={data.payload} />;
+    case 'rule_effectiveness':  return <RuleEffView p={data.payload} />;
+  }
+}
+
+function ReportViewDialog({ report, onClose }: { report: ReportResponse | null; onClose: () => void }) {
+  return (
+    <Dialog open={!!report} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100 max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-mono text-zinc-100 text-sm flex items-center gap-2">
+            <span className={`text-xs font-mono ${REPORT_TYPE_CLS[report?.type ?? 'fraud_summary']}`}>
+              {report?.type.replace(/_/g, ' ')}
+            </span>
+            <span className="text-zinc-400">·</span>
+            {report?.name}
+          </DialogTitle>
+        </DialogHeader>
+        {report && <ReportDataView data={report.data} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── REPORTS TAB ─────────────────────────────────────────────────────────────
 
 function ReportsTab() {
   const { data: reports, loading, refetch } = useReportList();
   const { generate, loading: generating, error: generateError } = useGenerateReport(() => { refetch(); setShowForm(false); });
-  const [showForm, setShowForm]             = useState(false);
+  const [showForm,      setShowForm]        = useState(false);
+  const [viewReport,    setViewReport]      = useState<ReportResponse | null>(null);
   const [form, setForm]                     = useState<GenerateReportDto>({
     name: 'Weekly Fraud Summary', type: 'fraud_summary', period: 'weekly',
   });
@@ -839,12 +1060,12 @@ function ReportsTab() {
   return (
     <div className="space-y-4">
       <SectionHeader
-        title="Reports"
-        sub="Fraud summary, volume, risk distribution, AI performance"
+        title="Звіти"
+        sub="Зведення шахрайства, обсяги, розподіл ризиків, продуктивність AI"
         action={
           <Button size="sm" onClick={() => setShowForm((p) => !p)}
             className="bg-purple-900 hover:bg-purple-800 text-white font-mono h-8 text-xs">
-            {showForm ? '− Cancel' : '+ Generate'}
+            {showForm ? '− Скасувати' : '+ Згенерувати'}
           </Button>
         }
       />
@@ -852,20 +1073,20 @@ function ReportsTab() {
       {showForm && (
         <Card className="bg-zinc-950 border-zinc-800 border-dashed">
           <CardContent className="p-4 space-y-3">
-            <Mono className="uppercase tracking-wider text-purple-400 block">Generate Report</Mono>
+            <Mono className="uppercase tracking-wider text-purple-400 block">Генерація звіту</Mono>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Name">
+              <Field label="Назва">
                 <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   className="bg-zinc-900 border-zinc-700 h-8 text-sm" />
               </Field>
-              <Field label="Type">
+              <Field label="Тип">
                 <Sel value={form.type} onValueChange={(v) => setForm((p) => ({ ...p, type: v as ReportType }))}>
                   {(['fraud_summary','transaction_volume','risk_distribution','rule_effectiveness','ai_performance'] as ReportType[]).map((t) => (
                     <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>
                   ))}
                 </Sel>
               </Field>
-              <Field label="Period">
+              <Field label="Період">
                 <Sel value={form.period} onValueChange={(v) => setForm((p) => ({ ...p, period: v as ReportPeriod }))}>
                   {(['daily','weekly','monthly','custom'] as ReportPeriod[]).map((p) => (
                     <SelectItem key={p} value={p}>{p}</SelectItem>
@@ -879,10 +1100,10 @@ function ReportsTab() {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setShowForm(false)} className="text-zinc-500 h-8">Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowForm(false)} className="text-zinc-500 h-8">Скасувати</Button>
               <Button size="sm" onClick={() => generate(form)} disabled={generating || !form.name}
                 className="bg-purple-900 hover:bg-purple-800 text-white font-mono h-8 text-xs">
-                {generating ? 'Generating…' : 'Generate'}
+                {generating ? 'Генерація…' : 'Згенерувати'}
               </Button>
             </div>
           </CardContent>
@@ -892,38 +1113,318 @@ function ReportsTab() {
       <div className="space-y-2">
         {loading ? Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-14 bg-zinc-900 rounded-lg" />) :
          reports.length === 0 ? (
-          <div className="text-center py-16 text-zinc-700 font-mono text-xs">No reports yet.</div>
+          <div className="text-center py-16 text-zinc-700 font-mono text-xs">Звітів ще немає.</div>
         ) : (
-          reports.map((r: unknown) => {
-            const rp = r as { id: string; name: string; type: ReportType; period: string; generatedAt: string };
-            return (
-              <Card key={rp.id} className="bg-zinc-950 border-zinc-800">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-zinc-100">{rp.name}</span>
-                      <Mono className={REPORT_TYPE_CLS[rp.type]}>{rp.type.replace(/_/g, ' ')}</Mono>
-                      <Mono className="border border-zinc-800 rounded px-1">{rp.period}</Mono>
-                    </div>
-                    <Mono className="mt-0.5">{fmtAgo(rp.generatedAt)}</Mono>
+          reports.map((rp) => (
+            <Card key={rp.id} className="bg-zinc-950 border-zinc-800">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-zinc-100">{rp.name}</span>
+                    <Mono className={REPORT_TYPE_CLS[rp.type]}>{rp.type.replace(/_/g, ' ')}</Mono>
+                    <Mono className="border border-zinc-800 rounded px-1">{rp.period}</Mono>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" className="text-zinc-400 hover:text-zinc-200 h-7 font-mono text-xs">
-                      View →
-                    </Button>
-                    <DeleteDialog
-                      name={rp.name}
-                      onDelete={() => reportsApi.remove(mkReportId(rp.id)).then(() => refetch())}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
+                  <Mono className="mt-0.5">{fmtAgo(rp.generatedAt)}</Mono>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => setViewReport(rp)}
+                    className="text-zinc-400 hover:text-zinc-200 h-7 font-mono text-xs"
+                  >
+                    Переглянути →
+                  </Button>
+                  <DeleteDialog
+                    name={rp.name}
+                    onDelete={() => reportsApi.remove(mkReportId(rp.id)).then(() => refetch())}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ))
         )}
       </div>
+
+      <ReportViewDialog report={viewReport} onClose={() => setViewReport(null)} />
     </div>
   );
+}
+
+// ─── DATASET TAB ─────────────────────────────────────────────────────────────
+
+type UlbParsedRow = UlbRowPayload
+
+function parseUlbCsv(text: string): { rows: UlbParsedRow[]; fraudCount: number; legitCount: number } {
+  const lines = text.trim().split('\n')
+  if (lines.length < 2) return { rows: [], fraudCount: 0, legitCount: 0 }
+
+  const header = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/\r/g, ''))
+  const rows: UlbParsedRow[] = []
+  let fraudCount = 0
+  let legitCount = 0
+
+  for (let i = 1; i < Math.min(lines.length, 50001); i++) {
+    const values = lines[i].trim().replace(/\r/g, '').split(',')
+    if (values.length < header.length) continue
+
+    const get = (key: string): number => {
+      const idx = header.indexOf(key)
+      return idx >= 0 ? parseFloat(values[idx]) : 0
+    }
+
+    const trueClass = Math.round(get('class')) as 0 | 1
+    if (trueClass === 1) fraudCount++
+    else legitCount++
+
+    rows.push({
+      rowIndex: i - 1,
+      time: get('time'), amount: get('amount'), trueClass,
+      v1: get('v1'), v2: get('v2'), v3: get('v3'), v4: get('v4'),
+      v5: get('v5'), v6: get('v6'), v7: get('v7'), v8: get('v8'),
+      v9: get('v9'), v10: get('v10'), v11: get('v11'), v12: get('v12'),
+      v13: get('v13'), v14: get('v14'), v15: get('v15'), v16: get('v16'),
+      v17: get('v17'), v18: get('v18'), v19: get('v19'), v20: get('v20'),
+      v21: get('v21'), v22: get('v22'), v23: get('v23'), v24: get('v24'),
+      v25: get('v25'), v26: get('v26'), v27: get('v27'), v28: get('v28'),
+    })
+  }
+
+  return { rows, fraudCount, legitCount }
+}
+
+function sampleRows(rows: UlbParsedRow[], count: number, balanced: boolean): UlbParsedRow[] {
+  const shuffled = [...rows].sort(() => Math.random() - 0.5)
+  if (!balanced) return shuffled.slice(0, count)
+
+  const fraud = shuffled.filter((r) => r.trueClass === 1)
+  const legit = shuffled.filter((r) => r.trueClass === 0)
+  const half = Math.floor(count / 2)
+  return [
+    ...fraud.slice(0, Math.min(half, fraud.length)),
+    ...legit.slice(0, count - Math.min(half, fraud.length)),
+  ].sort(() => Math.random() - 0.5)
+}
+
+const BATCH_SIZE = 5
+
+function DatasetTab() {
+  const [parseResult, setParseResult] = useState<{ rows: UlbParsedRow[]; fraudCount: number; legitCount: number } | null>(null)
+  const [parseError, setParseError]   = useState<string | null>(null)
+  const [parsing,    setParsing]      = useState(false)
+  const [sampleSize, setSampleSize]   = useState(25)
+  const [balanced,   setBalanced]     = useState(true)
+  const [running,    setRunning]      = useState(false)
+  const [results,    setResults]      = useState<UlbAnalysisResult[]>([])
+  const [progress,   setProgress]     = useState(0)
+  const [total,      setTotal]        = useState(0)
+  const [runError,   setRunError]     = useState<string | null>(null)
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setParseError(null)
+    setParseResult(null)
+    setResults([])
+    setParsing(true)
+    try {
+      const text = await file.text()
+      const result = parseUlbCsv(text)
+      if (result.rows.length === 0) {
+        setParseError('Не вдалось розпарсити CSV. Переконайтесь що формат — ULB Kaggle датасет.')
+      } else {
+        setParseResult(result)
+      }
+    } catch {
+      setParseError('Помилка читання файлу.')
+    } finally {
+      setParsing(false)
+    }
+    e.target.value = ''
+  }
+
+  const handleAnalyze = async () => {
+    if (!parseResult) return
+    const sample = sampleRows(parseResult.rows, sampleSize, balanced)
+    setResults([])
+    setRunning(true)
+    setRunError(null)
+    setProgress(0)
+    setTotal(sample.length)
+
+    try {
+      for (let i = 0; i < sample.length; i += BATCH_SIZE) {
+        const batch = sample.slice(i, i + BATCH_SIZE)
+        const batchResults = await datasetApi.analyzeBatch(batch)
+        setResults((prev) => [...prev, ...batchResults])
+        setProgress(Math.min(i + BATCH_SIZE, sample.length))
+      }
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Помилка аналізу')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const accuracy = results.length > 0
+    ? (results.filter((r) => r.isCorrect).length / results.length * 100).toFixed(1)
+    : null
+
+  const truePositives  = results.filter((r) => r.trueClass === 1 && r.verdict === 'fraud').length
+  const falseNegatives = results.filter((r) => r.trueClass === 1 && r.verdict === 'legitimate').length
+  const recall = (truePositives + falseNegatives) > 0
+    ? (truePositives / (truePositives + falseNegatives) * 100).toFixed(1)
+    : null
+
+  const falsePositives = results.filter((r) => r.trueClass === 0 && r.verdict === 'fraud').length
+  const precision = (truePositives + falsePositives) > 0
+    ? (truePositives / (truePositives + falsePositives) * 100).toFixed(1)
+    : null
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader
+        title="Аналіз датасету ULB"
+        sub="Credit Card Fraud Detection · Kaggle · Université Libre de Bruxelles"
+      />
+
+      {/* Upload */}
+      <Card className="bg-zinc-950 border-zinc-800 border-dashed">
+        <CardContent className="p-4 space-y-3">
+          <Mono className="uppercase tracking-wider text-zinc-400 block">Завантаження CSV</Mono>
+          <p className="text-xs text-zinc-600">
+            Очікуваний формат: <span className="text-zinc-500 font-mono">Time, V1…V28, Amount, Class</span>
+            {' '}— стандартний Kaggle датасет ULB. Обробляються перші 50 000 рядків.
+          </p>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <Button size="sm" asChild className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono h-8 text-xs pointer-events-none">
+              <span>{parsing ? 'Парсинг…' : 'Обрати файл'}</span>
+            </Button>
+            <input type="file" accept=".csv" onChange={handleFile} className="hidden" disabled={parsing || running} />
+            {parseResult && (
+              <Mono className="text-emerald-400">
+                {parseResult.rows.length.toLocaleString()} рядків · {parseResult.fraudCount} шахрайство · {parseResult.legitCount} легітимні
+              </Mono>
+            )}
+            {parseError && <Mono className="text-red-400">{parseError}</Mono>}
+          </label>
+        </CardContent>
+      </Card>
+
+      {/* Config + Run */}
+      {parseResult && (
+        <Card className="bg-zinc-950 border-zinc-800">
+          <CardContent className="p-4 space-y-3">
+            <Mono className="uppercase tracking-wider text-zinc-400 block">Налаштування вибірки</Mono>
+            <div className="flex items-center gap-4 flex-wrap">
+              <Field label="Кількість транзакцій">
+                <Sel value={String(sampleSize)} onValueChange={(v) => setSampleSize(Number(v))}>
+                  {[10, 25, 50].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                </Sel>
+              </Field>
+              <div className="flex items-center gap-2 pt-5">
+                <Switch checked={balanced} onCheckedChange={setBalanced} disabled={running} />
+                <Label className="text-xs text-zinc-400">Збалансована вибірка (50/50)</Label>
+              </div>
+              {balanced && parseResult.fraudCount < Math.floor(sampleSize / 2) && (
+                <Mono className="text-amber-400 text-xs">
+                  ⚠ Знайдено лише {parseResult.fraudCount} шахрайських транзакцій у завантажених рядках
+                </Mono>
+              )}
+              <Button
+                size="sm"
+                disabled={running}
+                onClick={handleAnalyze}
+                className="bg-blue-800 hover:bg-blue-700 text-white font-mono h-8 text-xs mt-5"
+              >
+                {running ? '⟳ Аналізую…' : '▶ Запустити аналіз'}
+              </Button>
+            </div>
+
+            {running && (
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <Mono className="text-blue-400">Прогрес</Mono>
+                  <Mono>{progress} / {total}</Mono>
+                </div>
+                <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                    style={{ width: total > 0 ? `${(progress / total) * 100}%` : '0%' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {runError && (
+              <div className="bg-red-950 border border-red-900 rounded p-2">
+                <Mono className="text-red-400">{runError}</Mono>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Accuracy summary */}
+      {results.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            { label: 'Accuracy',  val: accuracy  ? `${accuracy}%`  : '—', cls: 'text-emerald-400' },
+            { label: 'Recall',    val: recall    ? `${recall}%`    : '—', cls: 'text-blue-400'    },
+            { label: 'Precision', val: precision ? `${precision}%` : '—', cls: 'text-purple-400'  },
+            { label: 'Проаналізовано', val: results.length, cls: 'text-zinc-100' },
+          ].map(({ label, val, cls }) => (
+            <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+              <Mono className="uppercase tracking-wider block mb-1">{label}</Mono>
+              <span className={`text-xl font-mono font-bold ${cls}`}>{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Results table */}
+      {results.length > 0 && (
+        <div className="border border-zinc-800 rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900/60">
+                {['#', 'Сума', 'Правда', 'AI вердикт', 'Ризик', 'Впевненість', 'Час', 'Збіг'].map((h) => (
+                  <TableHead key={h} className="text-xs font-mono text-zinc-600 uppercase tracking-wider h-9 py-0">{h}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {results.map((r) => (
+                <TableRow key={r.rowIndex} className={`border-zinc-800 ${r.isCorrect ? '' : 'bg-red-950/20'}`}>
+                  <TableCell><Mono>{r.rowIndex}</Mono></TableCell>
+                  <TableCell className="font-mono text-sm text-zinc-200">${r.amount.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge className={`text-xs border font-mono ${r.trueClass === 1 ? 'bg-red-950 text-red-300 border-red-800' : 'bg-emerald-950 text-emerald-300 border-emerald-800'}`}>
+                      {r.trueClass === 1 ? 'fraud' : 'legit'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={`text-xs border font-mono ${r.verdict === 'fraud' ? 'bg-red-950 text-red-300 border-red-800' : 'bg-emerald-950 text-emerald-300 border-emerald-800'}`}>
+                      {r.verdict}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <RiskBar score={r.riskScore} level={r.riskLevel} />
+                  </TableCell>
+                  <TableCell><Mono>{(r.confidence * 100).toFixed(0)}%</Mono></TableCell>
+                  <TableCell><Mono>{r.processingTimeMs}ms</Mono></TableCell>
+                  <TableCell>
+                    <span className={`text-lg ${r.isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {r.isCorrect ? '✓' : '✗'}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
@@ -935,15 +1436,15 @@ export default function App() {
         {/* Header */}
         <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
           <div className="max-w-7xl mx-auto px-4 h-12 flex items-center gap-3">
-            <div className="w-5 h-5 rounded bg-emerald-600 flex items-center justify-center flex-shrink-0">
+            <div className="w-5 h-5 rounded bg-emerald-600 flex items-center justify-center shrink-0">
               <span className="text-xs font-black text-white leading-none">F</span>
             </div>
             <span className="font-mono font-bold text-zinc-100 tracking-tighter text-sm">FINGUARD</span>
             <Separator orientation="vertical" className="h-4 bg-zinc-800" />
-            <Mono className="text-zinc-700">AI Fraud Detection System</Mono>
+            <Mono className="text-zinc-700">Система виявлення шахрайства AI</Mono>
             <div className="ml-auto flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <Mono className="text-zinc-500">Claude AI · Live</Mono>
+              <Mono className="text-zinc-500">Claude AI · Активно</Mono>
             </div>
           </div>
         </header>
@@ -953,9 +1454,10 @@ export default function App() {
           <Tabs defaultValue="transactions">
             <TabsList className="bg-zinc-900 border border-zinc-800 mb-6 h-9">
               {[
-                { value: 'transactions', label: 'Transactions' },
-                { value: 'rules',        label: 'Fraud Rules' },
-                { value: 'reports',      label: 'Reports' },
+                { value: 'transactions', label: 'Транзакції' },
+                { value: 'rules',        label: 'Правила' },
+                { value: 'reports',      label: 'Звіти' },
+                { value: 'dataset',      label: 'Датасет ULB' },
               ].map(({ value, label }) => (
                 <TabsTrigger key={value} value={value}
                   className="font-mono text-xs h-7 data-[state=active]:bg-zinc-950 data-[state=active]:text-zinc-100 text-zinc-500">
@@ -967,6 +1469,7 @@ export default function App() {
             <TabsContent value="transactions"><TransactionsTab /></TabsContent>
             <TabsContent value="rules"><RulesTab /></TabsContent>
             <TabsContent value="reports"><ReportsTab /></TabsContent>
+            <TabsContent value="dataset"><DatasetTab /></TabsContent>
           </Tabs>
         </main>
       </div>

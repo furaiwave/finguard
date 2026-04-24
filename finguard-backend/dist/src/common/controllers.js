@@ -12,7 +12,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ReportController = exports.RuleContoller = exports.TransactionController = void 0;
+exports.ReportController = exports.DatasetController = exports.RuleContoller = exports.TransactionController = void 0;
 const common_1 = require("@nestjs/common");
 const types_1 = require("../../shared/types");
 const create_1 = require("./dto/create");
@@ -20,9 +20,11 @@ const query_1 = require("./dto/query");
 const createRule_1 = require("./dto/createRule");
 const update_1 = require("./dto/update");
 const report_1 = require("./dto/report");
+const ulbDataset_1 = require("./interceptors/entities/ulbDataset");
 const transactions_service_1 = require("../modules/transactions/transactions.service");
 const rules_service_1 = require("../modules/rules/rules.service");
 const reports_service_1 = require("../modules/reports/reports.service");
+const dataset_service_1 = require("../modules/dataset/dataset.service");
 const response_1 = require("./interceptors/response");
 const PIPES = new common_1.ValidationPipe({
     transform: true,
@@ -170,6 +172,30 @@ exports.RuleContoller = RuleContoller = __decorate([
     (0, common_1.Controller)('rules'),
     __metadata("design:paramtypes", [rules_service_1.RulesService])
 ], RuleContoller);
+let DatasetController = class DatasetController {
+    datasetService;
+    constructor(datasetService) {
+        this.datasetService = datasetService;
+    }
+    analyzeBatch(dto) {
+        return this.datasetService.analyzeBatch(dto.rows);
+    }
+};
+exports.DatasetController = DatasetController;
+__decorate([
+    (0, common_1.Post)('analyze-batch'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [ulbDataset_1.UlbBatchDto]),
+    __metadata("design:returntype", void 0)
+], DatasetController.prototype, "analyzeBatch", null);
+exports.DatasetController = DatasetController = __decorate([
+    (0, common_1.UseInterceptors)(response_1.ResponseIntercaptor),
+    (0, common_1.UsePipes)(PIPES),
+    (0, common_1.Controller)('dataset'),
+    __metadata("design:paramtypes", [dataset_service_1.DatasetAnalysisService])
+], DatasetController);
 let ReportController = class ReportController {
     reportService;
     constructor(reportService) {

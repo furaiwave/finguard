@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { transactionsApi, rulesApi, reportsApi, ApiClientError } from '../lib/api';
+import type { ReportResponse } from '../lib/api';
 import type { TransactionId, RuleId, ReportId } from '../../../finguard-backend/shared/types';
 import type { AnalysisResponseDto } from '../../../finguard-backend/src/common/dto/responseAnalysis'
 import type { CreateTransactionDto } from '../../../finguard-backend/src/common/dto/create'
@@ -201,7 +202,7 @@ export function useDeleteRule(onSuccess?: () => void) {
 export function useReportList() {
   const { state, refetch } = useFetch(() => reportsApi.list());
   return {
-    data:    state.status === 'success' ? state.data : [] as unknown[],
+    data:    state.status === 'success' ? state.data : [] as ReportResponse[],
     loading: state.status === 'loading',
     error:   state.status === 'error'   ? state.message : null,
     refetch,

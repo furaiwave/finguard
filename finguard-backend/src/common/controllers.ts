@@ -1,17 +1,19 @@
-import { 
+import {
     Controller, Get, Post, Put, Delete, Patch,
     Body, Param, Query, HttpCode, HttpStatus,
     UsePipes, ValidationPipe, UseInterceptors
 } from '@nestjs/common'
-import { mkTransactionId, mkRuleId, mkReportId } from 'shared/types' 
+import { mkTransactionId, mkRuleId, mkReportId } from 'shared/types'
 import { CreateTransactionDto } from './dto/create'
 import { TransactionQueryDto } from './dto/query'
 import { CreateRuleDto } from './dto/createRule'
 import { UpdateRulesDto } from './dto/update'
 import { GenerateReportDto } from './dto/report'
+import { UlbBatchDto } from './interceptors/entities/ulbDataset'
 import { TransactionsService } from 'src/modules/transactions/transactions.service'
 import { RulesService } from 'src/modules/rules/rules.service'
 import { ReportsService } from 'src/modules/reports/reports.service'
+import { DatasetAnalysisService } from 'src/modules/dataset/dataset.service'
 import { ResponseIntercaptor } from './interceptors/response'
 
 const PIPES = new ValidationPipe({
@@ -91,6 +93,19 @@ export class RuleContoller {
     @HttpCode(HttpStatus.NO_CONTENT)
     remove(@Param('id') id: string){
         return this.ruleService.remove(mkRuleId(id))
+    }
+}
+
+@UseInterceptors(ResponseIntercaptor)
+@UsePipes(PIPES)
+@Controller('dataset')
+export class DatasetController {
+    constructor(private readonly datasetService: DatasetAnalysisService) {}
+
+    @Post('analyze-batch')
+    @HttpCode(HttpStatus.OK)
+    analyzeBatch(@Body() dto: UlbBatchDto) {
+        return this.datasetService.analyzeBatch(dto.rows)
     }
 }
 

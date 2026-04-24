@@ -216,8 +216,9 @@ let AiAnalysisService = AiAnalysisService_1 = class AiAnalysisService {
         }
     }
     systemPrompt() {
-        return `You are an expert financial fraud detection AI. 
+        return `You are an expert financial fraud detection AI.
         Analyze transactions and respond ONLY with a JSON code block.
+        IMPORTANT: All text fields (reasoning, recommendations, signals descriptions, blockedReason description) MUST be written in Ukrainian language.
         Required schema:
         \`\`\`json
         {
@@ -227,15 +228,15 @@ let AiAnalysisService = AiAnalysisService_1 = class AiAnalysisService {
         "riskLevel": <"low"|"medium"|"high"|"critical">,
         "requiresReview": <boolean>,
         "reviewDeadlineHours": <number|null>,
-        "signals": [{"category": <string>, "code": <string>, "description": <string>, "weight": <float>}],
-        "reasoning": <string 2-4 sentences>,
-        "recommendations": [<string>],
-        "blockedReason": <signal object|null>
+        "signals": [{"category": <string>, "code": <string>, "description": <string in Ukrainian>, "weight": <float>}],
+        "reasoning": <string 2-4 sentences in Ukrainian>,
+        "recommendations": [<string in Ukrainian>],
+        "blockedReason": <signal object with description in Ukrainian|null>
         }
         \`\`\`
-        
+
         Signal categories: velocity, geolocation, device_fingerprint, behavioral, amount_anomaly, blacklist, pattern_match, ai_detected
-        
+
         Risk thresholds: 0-30=low/approved, 31-60=medium, 61-85=high/review, 86-100=critical/block
         Conservative bias: false negatives (missed fraud) cost more than false positives.`;
     }
@@ -258,7 +259,7 @@ let AiAnalysisService = AiAnalysisService_1 = class AiAnalysisService {
         ## Rule Engine Pre-Score
         Rule delta applied: ${ruleDelta > 0 ? '+' : ''}${ruleDelta} points
         
-        Analyze for fraud. Consider: amount anomalies, channel risk, authentication signals (3DS, PIN, CVV), behavioral patterns, rule triggers. Provide your JSON analysis.`;
+        Analyze for fraud. Consider: amount anomalies, channel risk, authentication signals (3DS, PIN, CVV), behavioral patterns, rule triggers. Provide your JSON analysis. All text in Ukrainian.`;
     }
     parseResponse(raw) {
         const match = raw.match(/```json\s*([\s\S]*?)\s*```/) ??
